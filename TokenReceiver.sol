@@ -5,6 +5,7 @@ import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/release-v3.4
 
 contract TokenReceiver is Ownable{
     
+    event Received(address, uint);
     event TokenReceived(string _name, uint _decimals, uint _amount, address _from);
     
     ERC20 ERC20Contract;
@@ -16,18 +17,23 @@ contract TokenReceiver is Ownable{
         vault = _vault;
     } 
     
-    function receiveTokens(address _tokenAddr, uint _amount) external {
-        require(whitelist[_tokenAddr], "Token not accepted");
-        require(_amount > 0, "Amount Not Valid");
-        ERC20Contract = ERC20(_tokenAddr);
-        ERC20Contract.transferFrom(msg.sender, vault, _amount);
+    function receiveTokens(address [] memory _tokenAddr, uint [] memory _amount) external {
+        require(checkWhitelisted(_tokenAddr), "Token not accepted");
         
-        emit TokenReceived(ERC20Contract.name(), ERC20Contract.decimals(), _amount, msg.sender);
+        for(uint i = 0; i < _tokenAddr.length; i++){
+            ERC20Contract = ERC20(_tokenAddr[i]);
+            ERC20Contract.transferFrom(msg.sender, vault, _amount[i] * (10 ** decimals(_tokenAddr[i])));
+        
+            emit TokenReceived(ERC20Contract.name(), ERC20Contract.decimals(), _amount[i], msg.sender);
+        }
     }
     
-    function receiveEther() external payable {
-        require(msg.value > 0, "Invalid Ether amount");
-        vault.transfer(msg.value);
+    function checkWhitelisted(address [] memory tokens) private view returns(bool){
+        for(uint i = 0; i < tokens.length; i++){
+            if(whitelist[tokens[i]] == false)
+                return false;
+        }
+        return true;
     }
     
     function addToWhitelist(address _tokenAddr) external onlyOwner {
@@ -44,8 +50,14 @@ contract TokenReceiver is Ownable{
         vault = _newWallet;
     }
     
-    // function decimals(address _tokenAddr) external view returns(uint) {
-    //     ERC20Contract.
-    // }
+    function decimals(address _tokenAddr) internal returns(uint) {
+        ERC20Contract = ERC20(_tokenAddr);
+        return ERC20Contract.decimals();
+    }
+    
+    receive() external payable {
+        vault.transfer(msg.value);
+        emit Received(msg.sender, msg.value);
+    }
     
 }
